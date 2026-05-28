@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Board Academy · MTD Presentation</title>
+
+<!-- SheetJS for Excel reading -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+/* ============================================================
+   TOKENS & RESET
+============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  --bg:      #f5f4f0;
+  --black:   #0d0d0b;
+  --gold:    #b8960c;
+  --yellow:  #f5e96a;
+  --tx:      #0d0d0b;
+  --tx2:     #5a5a52;
+  --tx3:     #9a9a8e;
+  --border:  #e0dfd8;
+  --meta-bg:    rgba(24,119,242,.07);
+  --link-bg:    rgba(0,119,181,.07);
+  --goog-bg:    rgba(234,67,53,.07);
+  --meta-c:  #1877f2;
+  --link-c:  #0077b5;
+  --goog-c:  #ea4335;
+  --radius:  12px;
+  --pill:    100px;
+  --font:    'Manrope', sans-serif;
+  --mono:    'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: var(--font); background: var(--black); color: var(--tx); }
+
+/* ============================================================
+   UPLOAD SCREEN
+============================================================ */
+#upload-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--black);
+  color: #fff;
+}
+
+.upload-logo {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--yellow);
+  margin-bottom: 2.5rem;
+}
+
+.upload-title {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  margin-bottom: .5rem;
+  text-align: center;
+}
+
+.upload-sub {
+  font-size: .9rem;
+  color: rgba(255,255,255,.45);
+  margin-bottom: 3rem;
+  text-align: center;
+}
+
+.drop-zone {
+  width: 100%;
+  max-width: 480px;
+  border: 1.5px dashed rgba(255,255,255,.18);
+  border-radius: var(--radius);
+  padding: 3rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  margin-bottom: 2rem;
+  background: rgba(255,255,255,.03);
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--yellow);
+  background: rgba(245,233,106,.04);
+}
+.drop-zone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+}
+.drop-icon { font-size: 2.5rem; opacity: .5; }
+.drop-label { font-size: .85rem; color: rgba(255,255,255,.5); text-align: center; }
+.drop-label strong { color: #fff; }
+.drop-file-name {
+  font-size: .8rem; color: var(--yellow); font-weight: 600;
+  display: none; text-align: center;
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 2rem;
+}
+.param-group {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+.param-group label {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.4);
+}
+.param-group input, .param-group select {
+  background: rgba(255,255,255,.06);
+  border: 1.5px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  color: #fff;
+  font-family: var(--font);
+  font-size: .9rem;
+  padding: .6rem .8rem;
+  outline: none;
+  transition: border-color .2s;
+}
+.param-group input:focus, .param-group select:focus {
+  border-color: var(--yellow);
+}
+.param-group select option { background: #1a1a18; }
+
+.btn-gerar {
+  width: 100%;
+  max-width: 480px;
+  background: var(--yellow);
+  color: var(--black);
+  font-family: var(--font);
+  font-size: .9rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  border: none;
+  border-radius: var(--pill);
+  padding: 1rem 2rem;
+  cursor: pointer;
+  transition: opacity .2s, transform .1s;
+}
+.btn-gerar:hover { opacity: .9; }
+.btn-gerar:active { transform: scale(.98); }
+.btn-gerar:disabled { opacity: .4; cursor: not-allowed; }
+
+.progress-wrap {
+  width: 100%;
+  max-width: 480px;
+  margin-top: 1.5rem;
+  display: none;
+  flex-direction: column;
+  gap: .6rem;
+}
+.progress-bar-bg {
+  height: 3px;
+  background: rgba(255,255,255,.1);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--yellow);
+  border-radius: 10px;
+  width: 0%;
+  transition: width .3s;
+}
+.progress-label {
+  font-size: .75rem;
+  color: rgba(255,255,255,.4);
+  text-align: center;
+}
+
+/* ============================================================
+   PRESENTATION SCREEN
+============================================================ */
+#pres-screen {
+  display: none;
+  position: fixed; inset: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* Navigation pill */
+.nav-pill {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--black);
+  color: #fff;
+  border-radius: var(--pill);
+  padding: .55rem 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  z-index: 100;
+  box-shadow: 0 4px 24px rgba(0,0,0,.3);
+  user-select: none;
+}
+.nav-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.6);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: .1rem .3rem;
+  border-radius: 4px;
+  transition: color .15s;
+  line-height: 1;
+}
+.nav-btn:hover { color: #fff; }
+.nav-dots {
+  display: flex;
+  gap: .35rem;
+  align-items: center;
+}
+.dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.25);
+  cursor: pointer;
+  transition: background .2s, transform .2s;
+}
+.dot.active { background: var(--yellow); transform: scale(1.4); }
+.nav-counter {
+  font-size: .7rem;
+  font-family: var(--mono);
+  color: rgba(255,255,255,.35);
+  min-width: 2.5rem;
+  text-align: right;
+}
+.nav-back-btn {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  background: rgba(0,0,0,.08);
+  border: none;
+  border-radius: var(--pill);
+  padding: .4rem .9rem;
+  font-size: .75rem;
+  font-family: var(--font);
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--tx2);
+  z-index: 100;
+  transition: background .2s;
+}
+.nav-back-btn:hover { background: rgba(0,0,0,.14); }
+
+/* Slides container */
+.slides-wrap {
+  width: 100%; height: 100%;
+  position: relative;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s;
+  padding-bottom: 5rem;
+}
+.slide.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ============================================================
+   SLIDE 0 — CAPA
+============================================================ */
+.slide-capa {
+  background: var(--black);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+}
+.capa-eyebrow {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.3);
+  margin-bottom: 2rem;
+}
+.capa-title {
+  font-size: clamp(2rem,6vw,4.5rem);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: #fff;
+  line-height: 1;
+  margin-bottom: .5rem;
+}
+.capa-title span { color: var(--yellow); }
+.capa-sub {
+  font-size: 1rem;
+  color: rgba(255,255,255,.4);
+  margin-top: 1.2rem;
+  font-weight: 400;
+}
+.capa-date {
+  margin-top: 3rem;
+  font-size: .8rem;
+  color: rgba(255,255,255,.25);
+  font-family: var(--mono);
+}
+
+/* ============================================================
+   SLIDE COMMON LAYOUT
+============================================================ */
+.slide-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 1rem;
+}
+
+.slide-header {
+  margin-bottom: 2rem;
+}
+.slide-eyebrow {
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: .35rem;
+}
+.slide-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--black);
+}
+
+/* ============================================================
+   METRIC CARDS
+============================================================ */
+.metric-grid {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.metric-grid-2 { grid-template-columns: repeat(2,1fr); }
+.metric-grid-3 { grid-template-columns: repeat(3,1fr); }
+.metric-grid-4 { grid-template-columns: repeat(4,1fr); }
+.metric-grid-5 { grid-template-columns: repeat(5,1fr); }
+
+.metric-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.4rem;
+}
+.metric-card.accent {
+  background: var(--black);
+  color: #fff;
+  border-color: var(--black);
+}
+.metric-card .mc-label {
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tx3);
+  margin-bottom: .4rem;
+}
+.metric-card.accent .mc-label { color: rgba(255,255,255,.4); }
+.metric-card .mc-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-family: var(--mono);
+  color: var(--black);
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+.metric-card.accent .mc-value { color: var(--yellow); }
+.metric-card .mc-sub {
+  font-size: .72rem;
+  color: var(--tx3);
+  margin-top: .25rem;
+}
+.metric-card.accent .mc-sub { color: rgba(255,255,255,.3); }
+
+/* ============================================================
+   OVERVIEW TABLE
+============================================================ */
+.table-wrap {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+thead tr {
+  background: var(--black);
+  color: #fff;
+}
+thead th {
+  padding: .75rem 1rem;
+  text-align: left;
+  font-size: .63rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.5);
+  white-space: nowrap;
+}
+thead th:first-child { color: rgba(255,255,255,.7); }
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: rgba(0,0,0,.02); }
+tbody td {
+  padding: .7rem 1rem;
+  color: var(--tx);
+  white-space: nowrap;
+}
+tbody td.num {
+  font-family: var(--mono);
+  font-size: .8rem;
+  text-align: right;
+}
+tbody td.prod-name { font-weight: 700; }
+tfoot tr {
+  background: rgba(0,0,0,.03);
+  border-top: 2px solid var(--border);
+}
+tfoot td {
+  padding: .7rem 1rem;
+  font-weight: 700;
+  font-family: var(--mono);
+  font-size: .8rem;
+  color: var(--black);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   PLATFORM CARDS
+============================================================ */
+.plat-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.plat-card {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.plat-card.dark-card {
+  background: var(--black);
+  border-color: var(--black);
+}
+.plat-card.meta-card { background: var(--meta-bg); }
+.plat-card.link-card { background: var(--link-bg); }
+.plat-card.goog-card { background: var(--goog-bg); }
+
+.plat-header {
+  padding: 1rem 1.2rem .6rem;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.dark-card .plat-header { border-bottom-color: rgba(255,255,255,.08); }
+.plat-badge {
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: .2rem .5rem;
+  border-radius: 4px;
+}
+.meta-card .plat-badge { background: var(--meta-c); color: #fff; }
+.link-card .plat-badge { background: var(--link-c); color: #fff; }
+.goog-card .plat-badge { background: var(--goog-c); color: #fff; }
+.dark-card .plat-badge { background: rgba(255,255,255,.1); color: rgba(255,255,255,.7); }
+
+.plat-body {
+  padding: .8rem 1.2rem 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem .8rem;
+}
+.plat-metric { display: flex; flex-direction: column; gap: .1rem; }
+.plat-metric .pm-label {
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+.dark-card .pm-label { color: rgba(255,255,255,.35); }
+.plat-metric .pm-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--black);
+  letter-spacing: -.02em;
+}
+.dark-card .pm-value { color: #fff; }
+.plat-metric .pm-sub {
+  font-size: .65rem;
+  color: var(--tx3);
+}
+.dark-card .pm-sub { color: rgba(255,255,255,.3); }
+
+/* Ganhos expandable */
+.ganhos-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(0,0,0,.06);
+  padding: .6rem 1.2rem;
+  font-family: var(--font);
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--gold);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.dark-card .ganhos-toggle {
+  border-top-color: rgba(255,255,255,.08);
+  color: var(--yellow);
+}
+.ganhos-table-wrap {
+  display: none;
+  padding: 0 1.2rem .8rem;
+}
+.ganhos-table-wrap.open { display: block; }
+.ganhos-table-wrap table { font-size: .72rem; }
+.ganhos-table-wrap thead tr { background: rgba(0,0,0,.08); }
+.dark-card .ganhos-table-wrap thead tr { background: rgba(255,255,255,.08); }
+.ganhos-table-wrap thead th { color: rgba(0,0,0,.4); }
+.dark-card .ganhos-table-wrap thead th { color: rgba(255,255,255,.4); }
+.ganhos-table-wrap tbody td { color: var(--tx); }
+.dark-card .ganhos-table-wrap tbody td { color: rgba(255,255,255,.8); }
+.ganhos-table-wrap tbody tr { border-bottom-color: rgba(0,0,0,.05); }
+.dark-card .ganhos-table-wrap tbody tr { border-bottom-color: rgba(255,255,255,.06); }
+a.deal-link {
+  color: var(--gold);
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: .68rem;
+}
+a.deal-link:hover { text-decoration: underline; }
+.dark-card a.deal-link { color: var(--yellow); }
+
+/* ============================================================
+   SCORE TABLE
+============================================================ */
+.score-table thead th { color: rgba(255,255,255,.45); font-size: .6rem; }
+.score-tag {
+  display: inline-block;
+  padding: .15rem .5rem;
+  border-radius: 20px;
+  font-size: .65rem;
+  font-weight: 700;
+  background: rgba(184,150,12,.12);
+  color: var(--gold);
+}
+.sla-pct {
+  font-size: .65rem;
+  color: var(--tx3);
+  font-family: var(--mono);
+}
+
+/* ============================================================
+   PROGRESS BAR (MTD)
+============================================================ */
+.mtd-bar-wrap {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.6rem;
+  margin-bottom: 1.5rem;
+}
+.mtd-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: .6rem;
+}
+.mtd-bar-labels span {
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--tx2);
+}
+.mtd-bar-bg {
+  height: 8px;
+  background: var(--border);
+  border-radius: 10px;
+  overflow: visible;
+  position: relative;
+  margin-bottom: .8rem;
+}
+.mtd-bar-fill {
+  height: 100%;
+  background: var(--black);
+  border-radius: 10px;
+  transition: width .5s;
+  position: relative;
+}
+.mtd-bar-esp-line {
+  position: absolute;
+  top: -4px;
+  height: 16px;
+  width: 2px;
+  background: var(--gold);
+  border-radius: 2px;
+}
+.mtd-bar-meta {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+.mtd-bar-stat { display: flex; flex-direction: column; gap: .1rem; }
+.mtd-bar-stat .mbs-label {
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+.mtd-bar-stat .mbs-value {
+  font-size: 1rem;
+  font-weight: 800;
+  font-family: var(--mono);
+  color: var(--black);
+}
+
+/* ============================================================
+   RESPONSIVE
+============================================================ */
+@media (max-width: 768px) {
+  .plat-grid { grid-template-columns: 1fr; }
+  .metric-grid-4, .metric-grid-5 { grid-template-columns: repeat(2,1fr); }
+  .metric-grid-3 { grid-template-columns: repeat(2,1fr); }
+  .params-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     UPLOAD SCREEN
+============================================================ -->
+<div id="upload-screen">
+  <div class="upload-logo">Board Academy</div>
+  <h1 class="upload-title">MTD <span style="color:var(--yellow)">Presentation</span></h1>
+  <p class="upload-sub">Carregue a planilha e configure o período</p>
+
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input" accept=".xlsx"/>
+    <div class="drop-icon">📊</div>
+    <div class="drop-label"><strong>Arraste o Excel</strong> ou clique para selecionar</div>
+    <div class="drop-file-name" id="file-name"></div>
+  </div>
+
+  <div class="params-grid">
+    <div class="param-group">
+      <label>Mês</label>
+      <select id="param-mes">
+        <option value="1">Janeiro</option>
+        <option value="2">Fevereiro</option>
+        <option value="3">Março</option>
+        <option value="4">Abril</option>
+        <option value="5" selected>Maio</option>
+        <option value="6">Junho</option>
+        <option value="7">Julho</option>
+        <option value="8">Agosto</option>
+        <option value="9">Setembro</option>
+        <option value="10">Outubro</option>
+        <option value="11">Novembro</option>
+        <option value="12">Dezembro</option>
+      </select>
+    </div>
+    <div class="param-group">
+      <label>Ano</label>
+      <input type="number" id="param-ano" value="2026" min="2024" max="2030"/>
+    </div>
+    <div class="param-group">
+      <label>Dia atual (até)</label>
+      <input type="number" id="param-dia" value="27" min="1" max="31"/>
+    </div>
+    <div class="param-group">
+      <label>Label do mês</label>
+      <input type="text" id="param-label" value="Mai/26" placeholder="Ex: Mai/26"/>
+    </div>
+    <div class="param-group">
+      <label>Meta mensal</label>
+      <input type="number" id="param-meta" value="9833"/>
+    </div>
+    <div class="param-group">
+      <label>Dias no mês</label>
+      <input type="number" id="param-dias" value="31" min="28" max="31"/>
+    </div>
+  </div>
+
+  <button class="btn-gerar" id="btn-gerar" disabled>Carregar arquivo primeiro</button>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+    <div class="progress-label" id="progress-label">Lendo planilha…</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PRESENTATION SCREEN
+============================================================ -->
+<div id="pres-screen">
+  <button class="nav-back-btn" id="nav-back">← Voltar</button>
+
+  <div class="slides-wrap" id="slides-wrap">
+    <!-- slides injected by JS -->
+  </div>
+
+  <div class="nav-pill">
+    <button class="nav-btn" id="nav-prev">←</button>
+    <div class="nav-dots" id="nav-dots"></div>
+    <button class="nav-btn" id="nav-next">→</button>
+    <span class="nav-counter" id="nav-counter">1/11</span>
+  </div>
+</div>
+
+<!-- Load processing logic -->
+<script src="index.js"></script>
+
+<script>
+// ============================================================
+// UI CONTROLLER
+// ============================================================
+let currentSlide = 0;
+let totalSlides  = 0;
+let presData     = null;
+
+// ---- File input ----
+const dropZone   = document.getElementById('drop-zone');
+const fileInput  = document.getElementById('file-input');
+const fileNameEl = document.getElementById('file-name');
+const btnGerar   = document.getElementById('btn-gerar');
+let   uploadedFile = null;
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) setFile(fileInput.files[0]);
+});
+
+function setFile(f) {
+  uploadedFile = f;
+  fileNameEl.textContent = f.name;
+  fileNameEl.style.display = 'block';
+  btnGerar.disabled = false;
+  btnGerar.textContent = 'Gerar Apresentação';
+}
+
+// ---- Generate ----
+btnGerar.addEventListener('click', async () => {
+  if (!uploadedFile) return;
+
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressFill = document.getElementById('progress-fill');
+  const progressLabel = document.getElementById('progress-label');
+
+  btnGerar.disabled = true;
+  progressWrap.style.display = 'flex';
+
+  const setProgress = (pct, label) => {
+    progressFill.style.width = pct + '%';
+    progressLabel.textContent = label;
+  };
+
+  try {
+    setProgress(10, 'Lendo planilha…');
+    await sleep(50);
+
+    const params = {
+      mesNum:     parseInt(document.getElementById('param-mes').value),
+      anoNum:     parseInt(document.getElementById('param-ano').value),
+      diaAtual:   parseInt(document.getElementById('param-dia').value),
+      mesLabel:   document.getElementById('param-label').value,
+      metaMensal: parseInt(document.getElementById('param-meta').value),
+      diasMes:    parseInt(document.getElementById('param-dias').value),
+    };
+
+    setProgress(30, 'Processando leads…');
+    await sleep(50);
+
+    presData = await window.processExcel(uploadedFile, params);
+
+    setProgress(70, 'Calculando métricas…');
+    await sleep(50);
+
+    setProgress(90, 'Montando slides…');
+    await sleep(50);
+
+    buildPresentation(presData);
+
+    setProgress(100, 'Pronto!');
+    await sleep(200);
+
+    document.getElementById('upload-screen').style.display = 'none';
+    document.getElementById('pres-screen').style.display = 'block';
+    goToSlide(0);
+
+  } catch(err) {
+    console.error(err);
+    progressLabel.textContent = '❌ Erro: ' + err.message;
+    btnGerar.disabled = false;
+  }
+});
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ---- Navigation ----
+document.getElementById('nav-prev').addEventListener('click', () => goToSlide(currentSlide - 1));
+document.getElementById('nav-next').addEventListener('click', () => goToSlide(currentSlide + 1));
+document.getElementById('nav-back').addEventListener('click', () => {
+  document.getElementById('pres-screen').style.display = 'none';
+  document.getElementById('upload-screen').style.display = 'flex';
+  document.getElementById('progress-wrap').style.display = 'none';
+  document.getElementById('progress-fill').style.width = '0%';
+  btnGerar.disabled = false;
+  btnGerar.textContent = 'Gerar Apresentação';
+});
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('pres-screen').style.display !== 'block') return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goToSlide(currentSlide + 1);
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   goToSlide(currentSlide - 1);
+});
+
+function goToSlide(n) {
+  const slides = document.querySelectorAll('.slide');
+  const dots   = document.querySelectorAll('.dot');
+  if (n < 0 || n >= slides.length) return;
+
+  slides[currentSlide]?.classList.remove('active');
+  dots[currentSlide]?.classList.remove('active');
+  currentSlide = n;
+  slides[currentSlide]?.classList.add('active');
+  dots[currentSlide]?.classList.add('active');
+  document.getElementById('nav-counter').textContent = `${n+1}/${slides.length}`;
+  // scroll to top
+  slides[currentSlide].scrollTop = 0;
+}
+
+// ============================================================
+// SLIDE BUILDERS
+// ============================================================
+function buildPresentation(d) {
+  const wrap = document.getElementById('slides-wrap');
+  const dotsWrap = document.getElementById('nav-dots');
+  wrap.innerHTML = '';
+  dotsWrap.innerHTML = '';
+
+  const slides = [
+    buildS0(d),  // capa
+    buildS1(d),  // overview MTD
+    buildS2(d),  // score semanal + cluster
+  ];
+
+  slides.forEach((html, i) => {
+    const el = document.createElement('div');
+    el.className = 'slide' + (i === 0 ? ' active' : '');
+    el.innerHTML = html;
+    // attach ganhos toggles
+    el.querySelectorAll('.ganhos-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tw = btn.nextElementSibling;
+        tw.classList.toggle('open');
+        btn.querySelector('.toggle-arrow').textContent = tw.classList.contains('open') ? '▲' : '▼';
+      });
+    });
+    wrap.appendChild(el);
+
+    const dot = document.createElement('div');
+    dot.className = 'dot' + (i === 0 ? ' active' : '');
+    dot.addEventListener('click', () => goToSlide(i));
+    dotsWrap.appendChild(dot);
+  });
+
+  totalSlides = slides.length;
+  document.getElementById('nav-counter').textContent = `1/${totalSlides}`;
+}
+
+// ---- S0: Capa ----
+function buildS0(d) {
+  const { mesLabel } = d.params;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+  return `
+  <div class="slide-capa">
+    <div class="capa-eyebrow">Board Academy · Weekly Report</div>
+    <h1 class="capa-title">Leads <span>MTD</span></h1>
+    <p class="capa-title" style="font-size:clamp(1.4rem,4vw,3rem);color:rgba(255,255,255,.7);">${mesLabel}</p>
+    <p class="capa-sub">Análise de performance · Tráfego Pago & Orgânico</p>
+    <p class="capa-date">Gerado em ${dateStr}</p>
+  </div>`;
+}
+
+// ---- S1: Overview MTD ----
+function buildS1(d) {
+  const m = d.mtd;
+  const espPct = Math.min((m.volTotal / m.mtdEsp) * 100, 100);
+  const metaPct = Math.min((m.volTotal / m.metaMensal) * 100, 100);
+
+  const overviewRows = d.overview.map(r => `
+    <tr>
+      <td class="prod-name">${r.nome}</td>
+      <td class="num">${fmtN(r.vol)}</td>
+      <td class="num">${fmtN(r.novos)}</td>
+      <td class="num">${fmtN(r.reaps)}</td>
+      <td class="num">${fmtBRL(r.invest)}</td>
+      <td class="num">${fmtBRL(r.cpl)}</td>
+      <td class="num">${fmtBRL(r.ganhos)}</td>
+      <td class="num">${r.roas > 0 ? r.roas.toFixed(2) + 'x' : '—'}</td>
+    </tr>`).join('');
+
+  const t = d.totais;
+  const totalRoas = t.invest > 0 ? (t.ganhos / t.invest).toFixed(2) : '—';
+
+  return `
+  <div class="slide-inner">
+    <div class="slide-header">
+      <div class="slide-eyebrow">Visão Geral</div>
+      <h2 class="slide-title">Overview MTD · ${d.params.mesLabel}</h2>
+    </div>
+
+    <!-- MTD Progress Bar -->
+    <div class="mtd-bar-wrap">
+      <div class="mtd-bar-labels">
+        <span>Vol. Leads MTD: <b style="font-family:var(--mono)">${fmtN(m.volTotal)}</b></span>
+        <span>Meta: <b style="font-family:var(--mono)">${fmtN(m.metaMensal)}</b></span>
+      </div>
+      <div class="mtd-bar-bg">
+        <div class="mtd-bar-fill" style="width:${metaPct}%"></div>
+        <div class="mtd-bar-esp-line" style="left:${Math.min((m.mtdEsp/m.metaMensal)*100,100)}%"></div>
+      </div>
+      <div class="mtd-bar-meta">
+        <div class="mtd-bar-stat">
+          <span class="mbs-label">% Meta Mensal</span>
+          <span class="mbs-value">${fmtPct(m.pctMeta)}</span>
+        </div>
+        <div class="mtd-bar-stat">
+          <span class="mbs-label">% MTD Esperado</span>
+          <span class="mbs-value">${fmtPct(m.pctMTD)}</span>
+        </div>
+        <div class="mtd-bar-stat">
+          <span class="mbs-label">MTD Esperado</span>
+          <span class="mbs-value">${fmtN(m.mtdEsp)}</span>
+        </div>
+        <div class="mtd-bar-stat">
+          <span class="mbs-label">Déficit</span>
+          <span class="mbs-value" style="${m.deficit > 0 ? 'color:#e53e3e' : 'color:#38a169'}">${m.deficit > 0 ? '+' : ''}${fmtN(m.deficit)}</span>
+        </div>
+        <div class="mtd-bar-stat">
+          <span class="mbs-label">Invest. Total</span>
+          <span class="mbs-value">${fmtBRL(m.investTotal)}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metric cards -->
+    <div class="metric-grid metric-grid-4" style="margin-bottom:1.5rem">
+      <div class="metric-card accent">
+        <div class="mc-label">Vol. Total</div>
+        <div class="mc-value">${fmtN(m.volTotal)}</div>
+        <div class="mc-sub">Dia ${m.diaAtual} de ${m.diasMes}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-label">Novos</div>
+        <div class="mc-value">${fmtN(m.novosTotal)}</div>
+        <div class="mc-sub">${fmtPct(m.volTotal ? (m.novosTotal/m.volTotal)*100 : 0)} do total</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-label">Reaplicações</div>
+        <div class="mc-value">${fmtN(m.reapsTotal)}</div>
+        <div class="mc-sub">${fmtPct(m.volTotal ? (m.reapsTotal/m.volTotal)*100 : 0)} do total</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-label">Ganhos</div>
+        <div class="mc-value">${fmtBRL(m.ganhoTotal)}</div>
+        <div class="mc-sub">ROAS ${t.invest > 0 ? (t.ganhos/t.invest).toFixed(2)+'x' : '—'}</div>
+      </div>
+    </div>
+
+    <!-- Overview table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Produto</th>
+            <th style="text-align:right">Vol.</th>
+            <th style="text-align:right">Novos</th>
+            <th style="text-align:right">Reap.</th>
+            <th style="text-align:right">Investimento</th>
+            <th style="text-align:right">CPL</th>
+            <th style="text-align:right">Ganhos</th>
+            <th style="text-align:right">ROAS</th>
+          </tr>
+        </thead>
+        <tbody>${overviewRows}</tbody>
+        <tfoot>
+          <tr>
+            <td>TOTAL</td>
+            <td style="text-align:right;font-family:var(--mono)">${fmtN(t.vol)}</td>
+            <td style="text-align:right;font-family:var(--mono)">${fmtN(t.novos)}</td>
+            <td style="text-align:right;font-family:var(--mono)">${fmtN(t.reaps)}</td>
+            <td style="text-align:right;font-family:var(--mono)">${fmtBRL(t.invest)}</td>
+            <td style="text-align:right;font-family:var(--mono)">${fmtBRL(t.cpl)}</td>
+            <td style="text-align:right;font-family:var(--mono)">${fmtBRL(t.ganhos)}</td>
+            <td style="text-align:right;font-family:var(--mono)">${totalRoas !== '—' ? totalRoas+'x' : '—'}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ---- S2: Score Semanal + Cluster ----
+function buildS2(d) {
+  const scoreRows = SCORE_ORDER.map(label => {
+    const row = d.scoreSemanal[label] || { S1:0, S2:0, S3:0, total:0 };
+    const tot = row.total;
+    return `
+    <tr>
+      <td><span class="score-tag">${label}</span></td>
+      <td class="num">${row.S1 || '—'}</td>
+      <td class="num">${row.S2 || '—'}</td>
+      <td class="num">${row.S3 || '—'}</td>
+      <td class="num"><b>${fmtN(tot)}</b></td>
+      <td class="num sla-pct">${SLA[label]}%</td>
+    </tr>`;
+  }).join('');
+
+  const clusters = ['1 CLUSTER SP','2 CLUSTER MG_RJ','3 CLUSTER CE_DF_PR_RS_SC','Outros'];
+  const clusterHeaders = clusters.map(c => `<th style="text-align:right">${c.replace('1 CLUSTER ','').replace('2 CLUSTER ','').replace('3 CLUSTER ','')}</th>`).join('');
+
+  const clusterRows = SCORE_ORDER.map(label => {
+    const row = d.scoreCluster[label] || {};
+    const cells = clusters.map(c => `<td class="num">${row[c] || '—'}</td>`).join('');
+    return `<tr><td><span class="score-tag">${label}</span></td>${cells}<td class="num"><b>${fmtN(row.total||0)}</b></td></tr>`;
+  }).join('');
+
+  return `
+  <div class="slide-inner">
+    <div class="slide-header">
+      <div class="slide-eyebrow">Qualificação</div>
+      <h2 class="slide-title">Score Semanal + Cluster · ${d.params.mesLabel}</h2>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+
+      <!-- Score Semanal -->
+      <div class="table-wrap">
+        <table class="score-table">
+          <thead>
+            <tr>
+              <th>Score</th>
+              <th style="text-align:right">S1</th>
+              <th style="text-align:right">S2</th>
+              <th style="text-align:right">S3</th>
+              <th style="text-align:right">Total</th>
+              <th style="text-align:right">SLA</th>
+            </tr>
+          </thead>
+          <tbody>${scoreRows}</tbody>
+        </table>
+      </div>
+
+      <!-- Score × Cluster -->
+      <div class="table-wrap">
+        <table class="score-table">
+          <thead>
+            <tr>
+              <th>Score</th>
+              ${clusterHeaders}
+              <th style="text-align:right">Total</th>
+            </tr>
+          </thead>
+          <tbody>${clusterRows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---- Platform card helper ----
+function platCard(title, cardClass, badgeLabel, data, isDark) {
+  const cpl  = data.vol > 0 ? data.invest / data.vol : 0;
+  const roas = data.invest > 0 ? data.ganhos / data.invest : 0;
+
+  const ganhoRows = (data.ganhoRows || []).map(g => `
+    <tr>
+      <td><a class="deal-link" href="https://app.pipedrive.com/deal/${g.id}" target="_blank">#${g.id}</a></td>
+      <td>${g.funil || '—'}</td>
+      <td>${g.prog || '—'}</td>
+      <td class="num">${fmtBRL(g.valor)}</td>
+    </tr>`).join('');
+
+  const ganhoSection = data.ganhoRows && data.ganhoRows.length > 0 ? `
+    <button class="ganhos-toggle">
+      💰 ${data.ganhoRows.length} ganho${data.ganhoRows.length > 1 ? 's' : ''} · ${fmtBRL(data.ganhos)}
+      <span class="toggle-arrow" style="margin-left:auto">▼</span>
+    </button>
+    <div class="ganhos-table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Funil</th><th>Programa</th><th style="text-align:right">Valor</th></tr></thead>
+        <tbody>${ganhoRows}</tbody>
+      </table>
+    </div>` : '';
+
+  return `
+  <div class="plat-card ${cardClass}">
+    <div class="plat-header">
+      <span class="plat-badge">${badgeLabel}</span>
+    </div>
+    <div class="plat-body">
+      <div class="plat-metric">
+        <span class="pm-label">Vol. Leads</span>
+        <span class="pm-value">${fmtN(data.vol)}</span>
+        <span class="pm-sub">${fmtN(data.novos)} novos · ${fmtN(data.reaps)} reap</span>
+      </div>
+      <div class="plat-metric">
+        <span class="pm-label">Investimento</span>
+        <span class="pm-value" style="font-size:.85rem">${fmtBRL(data.invest)}</span>
+      </div>
+      <div class="plat-metric">
+        <span class="pm-label">CPL</span>
+        <span class="pm-value" style="font-size:.85rem">${fmtBRL(cpl)}</span>
+      </div>
+      <div class="plat-metric">
+        <span class="pm-label">ROAS</span>
+        <span class="pm-value">${roas > 0 ? roas.toFixed(2)+'x' : '—'}</span>
+        <span class="pm-sub">Ganhos: ${fmtBRL(data.ganhos)}</span>
+      </div>
+    </div>
+    ${ganhoSection}
+  </div>`;
+}
+</script>
+</body>
+</html>
