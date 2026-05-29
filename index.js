@@ -362,9 +362,9 @@ window.processExcel = async function(file, params) {
   // Load score rules from Google Sheets
   const rules = await loadScoreRules();
 
-  // Read workbook
+  // Read workbook — cellFormula:false força leitura dos valores cached (não fórmulas)
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true, cellFormula: false });
 
   // Load sheets
   const pipe = sheetToRows(wb.Sheets['Base-PIPE']);
@@ -413,34 +413,37 @@ window.processExcel = async function(file, params) {
   }
 
   // ---- Build Consolidada Redes (auxiliar — só META, LINKEDIN, GOOGLE) ----
-  // MANYCHAT e outras redes são excluídas
-  // BOARD REVIEW é excluído dos produtos
+  // Campanhas com investimento NO PERÍODO — filtro por Dia
+  // Join com leads: por campanha apenas (sem cruzar Dia)
+  // BOARD REVIEW excluído
   const REDES_VALIDAS = ['META', 'LINKEDIN', 'GOOGLE'];
 
-  function isBoardReview(campanha) {
-    if (!campanha) return false;
-    const prod = resolveInvestProd(String(campanha).trim());
-    if (!prod) return false;
-    return String(prod).toLowerCase().includes('board review');
+  function inInvestPeriod(dateVal) {
+    const d = dateOnly(dateVal);
+    if (!d) return false;
+    return d.getFullYear() === anoNum && d.getMonth() + 1 === mesNum && d.getDate() <= diaAtual;
   }
 
+  // Campanhas META com custo no período
   const metaCampSet = new Set(
-    meta.map(r => String(r['Nome da campanha'] || '').trim())
+    meta.filter(r => inInvestPeriod(r['Dia']))
+        .map(r => String(r['Nome da campanha'] || '').trim())
         .filter(c => c && !isBoardReview(c))
   );
+  // Campanhas LINKEDIN com custo no período
   const linkCampSet = new Set(
-    link.map(r => String(r['Nome do grupo de campanhas'] || '').trim())
+    link.filter(r => inInvestPeriod(r['Data de início (em UTC)']))
+        .map(r => String(r['Nome do grupo de campanhas'] || '').trim())
         .filter(c => c && !isBoardReview(c))
   );
+  // IDs Google com custo no período
   const googIdSet = new Set(
-    goog.map(r => {
-      const id = r['ID'];
-      if (!id) return null;
-      const idStr = String(id).replace(/\.0$/, '').trim();
-      const camp = r['Campanha'];
-      if (camp && isBoardReview(String(camp).trim())) return null;
-      return idStr;
-    }).filter(Boolean)
+    goog.filter(r => inInvestPeriod(r['Dia']))
+        .map(r => {
+          const id = r['ID'];
+          if (!id) return null;
+          return String(id).replace(/\.0$/, '').trim();
+        }).filter(Boolean)
   );
 
   function extractCampId(utm) {
@@ -449,6 +452,7 @@ window.processExcel = async function(file, params) {
     return digits || null;
   }
 
+  // Join por campanha apenas (sem Dia) — igual ao PBI USERELATIONSHIP
   function hasInvestment(row) {
     const plat = row['Plataforma'];
     if (!REDES_VALIDAS.includes(plat)) return false;
@@ -492,21 +496,32 @@ window.processExcel = async function(file, params) {
     const idRaw  = row['ID'];
     const criado = row['Criado em'];
 
-    // Resolve utm_campaign, Produto, Plataforma via DEPARA
-    const resolved = lookupDepara(utmNao, idRaw);
-    if (resolved) {
-      row['utm_campaign'] = resolved.utm;
-      row['Produto']      = resolved.dep.produto;
-      row['Plataforma']   = resolved.dep.plataforma;
-      row['País']         = resolved.dep.pais;
-    } else {
-      // fallback: use whatever is stored (may be formula string — filter will exclude)
-      row['utm_campaign'] = utmNao || null;
+    // Com cellFormula:false, Produto/Plataforma/utm_campaign vêm com valores calculados
+    // Só usa DEPARA como fallback se o valor ainda for fórmula ou nulo
+    const prodRaw = row['Produto'];
+    const platRaw = row['Plataforma'];
+    const utmRaw  = row['utm_campaign'];
+
+    const needsDepara = !prodRaw || String(prodRaw).startsWith('=') ||
+                        !platRaw || String(platRaw).startsWith('=') ||
+                        !utmRaw  || String(utmRaw).startsWith('=');
+
+    if (needsDepara) {
+      const resolved = lookupDepara(utmNao, idRaw);
+      if (resolved) {
+        row['utm_campaign'] = resolved.utm;
+        row['Produto']      = resolved.dep.produto;
+        row['Plataforma']   = resolved.dep.plataforma;
+        row['País']         = resolved.dep.pais;
+      } else {
+        row['utm_campaign'] = utmNao || null;
+      }
     }
 
     // Data de Criação = date-only from Criado em
+    // Eixo temporal = Última aplicação_1 (igual ao PBI)
     row._dataCriacao   = dateOnly(criado);
-    row._dataAplicacao = dateOnly(row['Última aplicação']);
+    row._dataAplicacao = dateOnly(row['Última aplicação_1'] || row['Última aplicação']);
 
     // Score
     row._score      = calcScore(row, rules);
@@ -537,14 +552,16 @@ window.processExcel = async function(file, params) {
   function isReap(row) { return !isNovo(row); }
 
   // ---- Main filter ----
-  // Filtro simples: Produto nos 5, Plataforma em META/LINKEDIN/GOOGLE,
-  // utm_campaign preenchido, data no período
+  // Produto nos 5, Plataforma em META/LINKEDIN/GOOGLE,
+  // utm_campaign existe nas abas de investimento do período,
+  // data Última aplicação_1 no período
   const filtered = pipe.filter(row =>
     PRODS.includes(row['Produto']) &&
     REDES_VALIDAS.includes(row['Plataforma']) &&
     row['utm_campaign'] &&
     String(row['utm_campaign']).trim() !== '' &&
-    inPeriod(row)
+    inPeriod(row) &&
+    hasInvestment(row)
   );
 
   // ---- Semanas ----
@@ -619,7 +636,7 @@ window.processExcel = async function(file, params) {
   }
 
   // ---- Ganhos ----
-  // Mesmo filtro dos leads: produto, plataforma, período, utm preenchido
+  // Mesmo filtro dos leads: produto, plataforma, período, utm, hasInvestment
   function ganhoRows(prod, plat) {
     return pipe.filter(r =>
       r['Produto'] === prod &&
@@ -628,6 +645,7 @@ window.processExcel = async function(file, params) {
       r['utm_campaign'] &&
       String(r['utm_campaign']).trim() !== '' &&
       inPeriod(r) &&
+      hasInvestment(r) &&
       (!plat || r['Plataforma'] === plat)
     ).map(r => ({
       id:    r['ID'],
