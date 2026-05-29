@@ -536,14 +536,6 @@ window.processExcel = async function(file, params) {
     row._cluster = getCluster(row['Telefone']);
   }
 
-    // Score
-    row._score      = calcScore(row, rules);
-    row._scoreLabel = scoreLabel(row._score);
-
-    // Cluster
-    row._cluster = getCluster(row['Telefone']);
-  }
-
   // ---- Period filter ----
   function inPeriod(row) {
     const d = row._dataAplicacao;
