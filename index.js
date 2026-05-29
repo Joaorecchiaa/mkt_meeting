@@ -375,15 +375,35 @@ window.processExcel = async function(file, params) {
 
   // ---- Build Consolidada Redes (auxiliar — só META, LINKEDIN, GOOGLE) ----
   // MANYCHAT e outras redes são excluídas
+  // BOARD REVIEW é excluído dos produtos
   const REDES_VALIDAS = ['META', 'LINKEDIN', 'GOOGLE'];
 
-  const metaCampSet = new Set(meta.map(r => String(r['Nome da campanha'] || '').trim()).filter(Boolean));
-  const linkCampSet = new Set(link.map(r => String(r['Nome do grupo de campanhas'] || '').trim()).filter(Boolean));
-  const googIdSet   = new Set(goog.map(r => {
-    const id = r['ID'];
-    if (!id) return null;
-    return String(id).replace(/\.0$/, '').trim();
-  }).filter(Boolean));
+  function isBoardReview(campanha) {
+    if (!campanha) return false;
+    const prod = resolveInvestProd(String(campanha).trim());
+    if (!prod) return false;
+    return String(prod).toLowerCase().includes('board review');
+  }
+
+  const metaCampSet = new Set(
+    meta.map(r => String(r['Nome da campanha'] || '').trim())
+        .filter(c => c && !isBoardReview(c))
+  );
+  const linkCampSet = new Set(
+    link.map(r => String(r['Nome do grupo de campanhas'] || '').trim())
+        .filter(c => c && !isBoardReview(c))
+  );
+  const googIdSet = new Set(
+    goog.map(r => {
+      const id = r['ID'];
+      if (!id) return null;
+      const idStr = String(id).replace(/\.0$/, '').trim();
+      // Resolve campanha name para checar produto
+      const camp = r['Campanha'];
+      if (camp && isBoardReview(String(camp).trim())) return null;
+      return idStr;
+    }).filter(Boolean)
+  );
 
   function extractCampId(utm) {
     if (!utm) return null;
@@ -543,6 +563,9 @@ window.processExcel = async function(file, params) {
     return dep ? dep.produto : null;
   }
 
+  // Produtos excluídos da Consolidada Redes
+  const PRODS_EXCLUIR_INVEST = ['BOARD REVIEW', 'Board Review'];
+
   // Para Google: chave é nome da campanha 'Campanha', não ID
   function investByProd(rows, dateCol, valorCol, campCol) {
     const result = {};
@@ -554,9 +577,14 @@ window.processExcel = async function(file, params) {
       // Resolve produto via DEPARA (ignora fórmulas da planilha)
       const camp = r[campCol];
       const prod = resolveInvestProd(camp);
-      if (!prod || !PRODS.includes(String(prod).trim())) continue;
+      if (!prod) continue;
+      const prodStr = String(prod).trim();
 
-      result[prod] = (result[prod] || 0) + (r[valorCol] || 0);
+      // Exclui BOARD REVIEW e produtos fora de PRODS
+      if (PRODS_EXCLUIR_INVEST.some(e => prodStr.toLowerCase() === e.toLowerCase())) continue;
+      if (!PRODS.includes(prodStr)) continue;
+
+      result[prodStr] = (result[prodStr] || 0) + (r[valorCol] || 0);
     }
     return result;
   }
