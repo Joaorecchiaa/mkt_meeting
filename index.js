@@ -373,23 +373,10 @@ window.processExcel = async function(file, params) {
   const goog = sheetToRows(wb.Sheets['Base_google']);
   const link = sheetToRows(wb.Sheets['Base_linkedin_Valor']);
 
-  // Build DEPARA lookup
-  const deparaMap = {};
-  for (const row of dep) {
-    const key = row['Nome do grupo de campanhas'];
-    if (key) {
-      deparaMap[String(key).trim()] = {
-        produto:    row['Produto'],
-        plataforma: row['Plataforma'],
-        pais:       row['País'],
-        tipo:       row['TIPO'],
-      };
-    }
-  }
+  // ---- Build Consolidada Redes (auxiliar — só META, LINKEDIN, GOOGLE) ----
+  // MANYCHAT e outras redes são excluídas
+  const REDES_VALIDAS = ['META', 'LINKEDIN', 'GOOGLE'];
 
-  // ---- Build investment campaign sets (for lead filter) ----
-  // META/LINKEDIN: match by campaign name
-  // GOOGLE: match by numeric ID extracted from utm_campaign
   const metaCampSet = new Set(meta.map(r => String(r['Nome da campanha'] || '').trim()).filter(Boolean));
   const linkCampSet = new Set(link.map(r => String(r['Nome do grupo de campanhas'] || '').trim()).filter(Boolean));
   const googIdSet   = new Set(goog.map(r => {
@@ -406,7 +393,8 @@ window.processExcel = async function(file, params) {
 
   function hasInvestment(row) {
     const plat = row['Plataforma'];
-    const utm  = String(row['utm_campaign'] || '').trim();
+    if (!REDES_VALIDAS.includes(plat)) return false;
+    const utm = String(row['utm_campaign'] || '').trim();
     if (plat === 'META')     return metaCampSet.has(utm);
     if (plat === 'LINKEDIN') return linkCampSet.has(utm);
     if (plat === 'GOOGLE') {
@@ -416,23 +404,73 @@ window.processExcel = async function(file, params) {
     return false;
   }
 
-  // Enrich pipe rows
-  for (const row of pipe) {
-    const utm = row['utm_campaign'];
-    if (utm) {
-      const d = deparaMap[String(utm).trim()];
-      if (d) {
-        if (!row['Produto']    || String(row['Produto']).startsWith('='))    row['Produto']    = d.produto;
-        if (!row['Plataforma'] || String(row['Plataforma']).startsWith('=')) row['Plataforma'] = d.plataforma;
-        if (!row['País']       || String(row['País']).startsWith('='))       row['País']       = d.pais;
-      }
+  // ---- Enrich pipe rows ----
+  // Colunas fórmula no xlsx precisam ser recalculadas:
+  // utm_campaign [35] = IF(Plataforma=GOOGLE, ID_numérico, utm_campaign_nao)
+  // Produto [28]      = VLOOKUP(utm_campaign, DEPARA, 2)
+  // Plataforma [31]   = VLOOKUP(utm_campaign, DEPARA, 5)
+  // Data de Criação [27] = DATE(YEAR(Criado em), MONTH(Criado em), DAY(Criado em))
+  // ETIQUETA [32]     = VLOOKUP(Pontuação, score table) — usamos scoreLabel()
+
+  // Build DEPARA lookup by both: campaign name AND numeric ID
+  const deparaByName = {};
+  const deparaById   = {};
+  for (const row of dep) {
+    const key = row['Nome do grupo de campanhas'];
+    if (!key) continue;
+    const keyStr = String(key).trim();
+    const info = {
+      produto:    row['Produto'],
+      plataforma: row['Plataforma'],
+      pais:       row['País'],
+      tipo:       row['TIPO'],
+    };
+    deparaByName[keyStr] = info;
+    // Also index by digits-only ID for Google
+    const digits = keyStr.replace(/[^0-9]/g, '');
+    if (digits) deparaById[digits] = info;
+  }
+
+  function lookupDepara(utmCampNao, idRaw) {
+    // Try campaign name first (META/LINKEDIN)
+    if (utmCampNao) {
+      const d = deparaByName[String(utmCampNao).trim()];
+      if (d) return { dep: d, utm: String(utmCampNao).trim() };
     }
-    // Parse dates
-    row._dataCriacao   = dateOnly(row['Data de Criação'] || row['Criado em']);
+    // Try numeric ID (GOOGLE)
+    if (idRaw != null) {
+      const idStr = String(idRaw).replace(/\.0$/, '').trim();
+      const d = deparaByName[idStr] || deparaById[idStr];
+      if (d) return { dep: d, utm: idStr };
+    }
+    return null;
+  }
+
+  for (const row of pipe) {
+    const utmNao = row['utm_campaign_nao'];
+    const idRaw  = row['ID'];
+    const criado = row['Criado em'];
+
+    // Resolve utm_campaign, Produto, Plataforma via DEPARA
+    const resolved = lookupDepara(utmNao, idRaw);
+    if (resolved) {
+      row['utm_campaign'] = resolved.utm;
+      row['Produto']      = resolved.dep.produto;
+      row['Plataforma']   = resolved.dep.plataforma;
+      row['País']         = resolved.dep.pais;
+    } else {
+      // fallback: use whatever is stored (may be formula string — filter will exclude)
+      row['utm_campaign'] = utmNao || null;
+    }
+
+    // Data de Criação = date-only from Criado em
+    row._dataCriacao   = dateOnly(criado);
     row._dataAplicacao = dateOnly(row['Última aplicação']);
+
     // Score
-    row._score = calcScore(row, rules);
+    row._score      = calcScore(row, rules);
     row._scoreLabel = scoreLabel(row._score);
+
     // Cluster
     row._cluster = getCluster(row['Telefone']);
   }
@@ -489,23 +527,43 @@ window.processExcel = async function(file, params) {
   const deficit  = mtdEsp - volTotal;
 
   // ---- Investment helpers ----
-  // Filtra apenas produtos de PRODS e período correto
-  function investByProd(rows, dateCol, valorCol) {
+  // ATENÇÃO: coluna 'Produto' nas abas de investimento é fórmula VLOOKUP
+  // SheetJS lê a fórmula como string — precisamos derivar via DEPARA
+
+  // Coluna chave de cada aba de investimento -> DEPARA
+  // META: 'Nome da campanha' -> DEPARA 'Nome do grupo de campanhas' -> Produto
+  // GOOGLE: 'Campanha' -> DEPARA -> Produto  (mas DEPARA key é nome, Google usa ID)
+  //         Usamos o campo 'Produto' da consolidada via DEPARA pelo nome da campanha
+  // LINKEDIN: 'Nome do grupo de campanhas' -> DEPARA -> Produto
+
+  function resolveInvestProd(campanha) {
+    if (!campanha) return null;
+    const key = String(campanha).trim();
+    const dep = deparaByName[key];
+    return dep ? dep.produto : null;
+  }
+
+  // Para Google: chave é nome da campanha 'Campanha', não ID
+  function investByProd(rows, dateCol, valorCol, campCol) {
     const result = {};
     for (const r of rows) {
       const d = dateOnly(r[dateCol]);
       if (!d) continue;
       if (d.getFullYear() !== anoNum || d.getMonth() + 1 !== mesNum || d.getDate() > diaAtual) continue;
-      const prod = r['Produto'];
+
+      // Resolve produto via DEPARA (ignora fórmulas da planilha)
+      const camp = r[campCol];
+      const prod = resolveInvestProd(camp);
       if (!prod || !PRODS.includes(String(prod).trim())) continue;
+
       result[prod] = (result[prod] || 0) + (r[valorCol] || 0);
     }
     return result;
   }
 
-  const metaInvest = investByProd(meta, 'Dia', 'Valor usado (BRL)');
-  const googInvest = investByProd(goog, 'Dia', 'Custo');
-  const linkInvest = investByProd(link, 'Data de início (em UTC)', 'Total investido');
+  const metaInvest = investByProd(meta, 'Dia',                     'Valor usado (BRL)', 'Nome da campanha');
+  const googInvest = investByProd(goog, 'Dia',                     'Custo',             'Campanha');
+  const linkInvest = investByProd(link, 'Data de início (em UTC)', 'Total investido',   'Nome do grupo de campanhas');
 
   function totalInvestProd(prod) {
     return (metaInvest[prod] || 0) + (googInvest[prod] || 0) + (linkInvest[prod] || 0);
