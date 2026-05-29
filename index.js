@@ -412,6 +412,12 @@ window.processExcel = async function(file, params) {
     return dep ? dep.produto : null;
   }
 
+  function isBoardReview(campanha) {
+    if (!campanha) return false;
+    const prod = resolveInvestProd(String(campanha).trim());
+    return prod ? String(prod).toLowerCase().includes('board review') : false;
+  }
+
   // ---- Build Consolidada Redes (auxiliar — só META, LINKEDIN, GOOGLE) ----
   // Campanhas com investimento NO PERÍODO — filtro por Dia
   // Join com leads: por campanha apenas (sem cruzar Dia)
