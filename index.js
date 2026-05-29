@@ -374,27 +374,41 @@ window.processExcel = async function(file, params) {
   const link = sheetToRows(wb.Sheets['Base_linkedin_Valor']);
 
   // ---- Build DEPARA lookup (deve vir antes dos camp sets) ----
+  // DEPARA tem chaves concatenadas ex: "[TORANJA] [LEAN] [MENSAGENS]LKDNAds[...]"
+  // A chave real é a parte ANTES de LKDNAds / FBAds / MetaAds / FBads / googlesearch etc.
+  const AD_SUFFIXES = /LKDNAds|FBAds|MetaAds|FBads|googlesearch|google_pmax|LKDNads|Org/i;
+
+  function cleanDepaKey(raw) {
+    const s = String(raw).trim();
+    const match = s.search(AD_SUFFIXES);
+    return match > 0 ? s.substring(0, match).trim() : s;
+  }
+
   const deparaByName = {};
   const deparaById   = {};
   for (const row of dep) {
     const key = row['Nome do grupo de campanhas'];
     if (!key) continue;
-    const keyStr = String(key).trim();
+    const keyStr  = String(key).trim();
+    const keyClean = cleanDepaKey(keyStr);
     const info = {
       produto:    row['Produto'],
       plataforma: row['Plataforma'],
       pais:       row['País'],
       tipo:       row['TIPO'],
     };
-    deparaByName[keyStr] = info;
-    const digits = keyStr.replace(/[^0-9]/g, '');
+    // Index by full key AND clean key
+    deparaByName[keyStr]   = info;
+    deparaByName[keyClean] = info;
+    // Index by digits-only for Google
+    const digits = keyClean.replace(/[^0-9]/g, '');
     if (digits) deparaById[digits] = info;
   }
 
   function resolveInvestProd(campanha) {
     if (!campanha) return null;
     const key = String(campanha).trim();
-    const dep = deparaByName[key];
+    const dep = deparaByName[key] || deparaByName[cleanDepaKey(key)];
     return dep ? dep.produto : null;
   }
 
@@ -457,10 +471,12 @@ window.processExcel = async function(file, params) {
   // ETIQUETA [32]     = VLOOKUP(Pontuação, score table) — usamos scoreLabel()
 
   function lookupDepara(utmCampNao, idRaw) {
-    // Try campaign name first (META/LINKEDIN)
+    // Try campaign name first (META/LINKEDIN) — tenta chave exata e chave limpa
     if (utmCampNao) {
-      const d = deparaByName[String(utmCampNao).trim()];
-      if (d) return { dep: d, utm: String(utmCampNao).trim() };
+      const raw   = String(utmCampNao).trim();
+      const clean = cleanDepaKey(raw);
+      const d = deparaByName[raw] || deparaByName[clean];
+      if (d) return { dep: d, utm: raw };
     }
     // Try numeric ID (GOOGLE)
     if (idRaw != null) {
