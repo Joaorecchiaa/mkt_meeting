@@ -502,8 +502,8 @@ window.processExcel = async function(file, params) {
     const idRaw  = row['ID'];
     const criado = row['Criado em'];
 
-    // Com cellFormula:false, Produto/Plataforma/utm_campaign vêm com valores calculados
-    // Só usa DEPARA como fallback se o valor ainda for fórmula ou nulo
+    // Com cellFormula:false, células fórmula retornam o valor em cache
+    // Se o cache estiver vazio (null), usamos DEPARA como fallback
     const prodRaw = row['Produto'];
     const platRaw = row['Plataforma'];
     const utmRaw  = row['utm_campaign'];
@@ -515,19 +515,26 @@ window.processExcel = async function(file, params) {
     if (needsDepara) {
       const resolved = lookupDepara(utmNao, idRaw);
       if (resolved) {
-        row['utm_campaign'] = resolved.utm;
-        row['Produto']      = resolved.dep.produto;
-        row['Plataforma']   = resolved.dep.plataforma;
-        row['País']         = resolved.dep.pais;
+        if (!prodRaw || String(prodRaw).startsWith('=')) row['Produto']    = resolved.dep.produto;
+        if (!platRaw || String(platRaw).startsWith('=')) row['Plataforma'] = resolved.dep.plataforma;
+        if (!utmRaw  || String(utmRaw).startsWith('='))  row['utm_campaign'] = resolved.utm;
+        row['País'] = row['País'] || resolved.dep.pais;
       } else {
-        row['utm_campaign'] = utmNao || null;
+        if (!utmRaw || String(utmRaw).startsWith('=')) row['utm_campaign'] = utmNao || null;
       }
     }
 
-    // Data de Criação = date-only from Criado em
     // Eixo temporal = Última aplicação_1 (igual ao PBI)
     row._dataCriacao   = dateOnly(criado);
     row._dataAplicacao = dateOnly(row['Última aplicação_1'] || row['Última aplicação']);
+
+    // Score
+    row._score      = calcScore(row, rules);
+    row._scoreLabel = scoreLabel(row._score);
+
+    // Cluster
+    row._cluster = getCluster(row['Telefone']);
+  }
 
     // Score
     row._score      = calcScore(row, rules);
