@@ -489,6 +489,7 @@ window.processExcel = async function(file, params) {
   const deficit  = mtdEsp - volTotal;
 
   // ---- Investment helpers ----
+  // Filtra apenas produtos de PRODS e período correto
   function investByProd(rows, dateCol, valorCol) {
     const result = {};
     for (const r of rows) {
@@ -496,7 +497,7 @@ window.processExcel = async function(file, params) {
       if (!d) continue;
       if (d.getFullYear() !== anoNum || d.getMonth() + 1 !== mesNum || d.getDate() > diaAtual) continue;
       const prod = r['Produto'];
-      if (!PRODS.includes(prod)) continue;
+      if (!prod || !PRODS.includes(String(prod).trim())) continue;
       result[prod] = (result[prod] || 0) + (r[valorCol] || 0);
     }
     return result;
@@ -518,11 +519,13 @@ window.processExcel = async function(file, params) {
   }
 
   // ---- Ganhos ----
+  // Filtra por: período (data_aplicacao) + invest match + status Ganho
   function ganhoRows(prod, plat) {
     return pipe.filter(r =>
       r['Produto'] === prod &&
       r['Status'] === 'Ganho' &&
       inPeriod(r) &&
+      hasInvestment(r) &&
       (!plat || r['Plataforma'] === plat)
     ).map(r => ({
       id:    r['ID'],
