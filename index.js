@@ -387,6 +387,35 @@ window.processExcel = async function(file, params) {
     }
   }
 
+  // ---- Build investment campaign sets (for lead filter) ----
+  // META/LINKEDIN: match by campaign name
+  // GOOGLE: match by numeric ID extracted from utm_campaign
+  const metaCampSet = new Set(meta.map(r => String(r['Nome da campanha'] || '').trim()).filter(Boolean));
+  const linkCampSet = new Set(link.map(r => String(r['Nome do grupo de campanhas'] || '').trim()).filter(Boolean));
+  const googIdSet   = new Set(goog.map(r => {
+    const id = r['ID'];
+    if (!id) return null;
+    return String(id).replace(/\.0$/, '').trim();
+  }).filter(Boolean));
+
+  function extractCampId(utm) {
+    if (!utm) return null;
+    const digits = String(utm).replace(/[^0-9]/g, '');
+    return digits || null;
+  }
+
+  function hasInvestment(row) {
+    const plat = row['Plataforma'];
+    const utm  = String(row['utm_campaign'] || '').trim();
+    if (plat === 'META')     return metaCampSet.has(utm);
+    if (plat === 'LINKEDIN') return linkCampSet.has(utm);
+    if (plat === 'GOOGLE') {
+      const id = extractCampId(utm);
+      return id ? googIdSet.has(id) : false;
+    }
+    return false;
+  }
+
   // Enrich pipe rows
   for (const row of pipe) {
     const utm = row['utm_campaign'];
@@ -429,12 +458,14 @@ window.processExcel = async function(file, params) {
   function isReap(row) { return !isNovo(row); }
 
   // ---- Main filter ----
+  // Inclui apenas leads com utm_campaign que existe nas abas de investimento
   const filtered = pipe.filter(row =>
     PRODS.includes(row['Produto']) &&
     row['Plataforma'] !== 'ORGANICO' &&
     row['utm_campaign'] &&
     String(row['utm_campaign']).trim() !== '' &&
-    inPeriod(row)
+    inPeriod(row) &&
+    hasInvestment(row)
   );
 
   // ---- Semanas ----
