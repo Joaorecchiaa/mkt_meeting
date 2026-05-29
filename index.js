@@ -373,6 +373,31 @@ window.processExcel = async function(file, params) {
   const goog = sheetToRows(wb.Sheets['Base_google']);
   const link = sheetToRows(wb.Sheets['Base_linkedin_Valor']);
 
+  // ---- Build DEPARA lookup (deve vir antes dos camp sets) ----
+  const deparaByName = {};
+  const deparaById   = {};
+  for (const row of dep) {
+    const key = row['Nome do grupo de campanhas'];
+    if (!key) continue;
+    const keyStr = String(key).trim();
+    const info = {
+      produto:    row['Produto'],
+      plataforma: row['Plataforma'],
+      pais:       row['País'],
+      tipo:       row['TIPO'],
+    };
+    deparaByName[keyStr] = info;
+    const digits = keyStr.replace(/[^0-9]/g, '');
+    if (digits) deparaById[digits] = info;
+  }
+
+  function resolveInvestProd(campanha) {
+    if (!campanha) return null;
+    const key = String(campanha).trim();
+    const dep = deparaByName[key];
+    return dep ? dep.produto : null;
+  }
+
   // ---- Build Consolidada Redes (auxiliar — só META, LINKEDIN, GOOGLE) ----
   // MANYCHAT e outras redes são excluídas
   // BOARD REVIEW é excluído dos produtos
@@ -398,7 +423,6 @@ window.processExcel = async function(file, params) {
       const id = r['ID'];
       if (!id) return null;
       const idStr = String(id).replace(/\.0$/, '').trim();
-      // Resolve campanha name para checar produto
       const camp = r['Campanha'];
       if (camp && isBoardReview(String(camp).trim())) return null;
       return idStr;
@@ -431,25 +455,6 @@ window.processExcel = async function(file, params) {
   // Plataforma [31]   = VLOOKUP(utm_campaign, DEPARA, 5)
   // Data de Criação [27] = DATE(YEAR(Criado em), MONTH(Criado em), DAY(Criado em))
   // ETIQUETA [32]     = VLOOKUP(Pontuação, score table) — usamos scoreLabel()
-
-  // Build DEPARA lookup by both: campaign name AND numeric ID
-  const deparaByName = {};
-  const deparaById   = {};
-  for (const row of dep) {
-    const key = row['Nome do grupo de campanhas'];
-    if (!key) continue;
-    const keyStr = String(key).trim();
-    const info = {
-      produto:    row['Produto'],
-      plataforma: row['Plataforma'],
-      pais:       row['País'],
-      tipo:       row['TIPO'],
-    };
-    deparaByName[keyStr] = info;
-    // Also index by digits-only ID for Google
-    const digits = keyStr.replace(/[^0-9]/g, '');
-    if (digits) deparaById[digits] = info;
-  }
 
   function lookupDepara(utmCampNao, idRaw) {
     // Try campaign name first (META/LINKEDIN)
@@ -555,13 +560,6 @@ window.processExcel = async function(file, params) {
   // GOOGLE: 'Campanha' -> DEPARA -> Produto  (mas DEPARA key é nome, Google usa ID)
   //         Usamos o campo 'Produto' da consolidada via DEPARA pelo nome da campanha
   // LINKEDIN: 'Nome do grupo de campanhas' -> DEPARA -> Produto
-
-  function resolveInvestProd(campanha) {
-    if (!campanha) return null;
-    const key = String(campanha).trim();
-    const dep = deparaByName[key];
-    return dep ? dep.produto : null;
-  }
 
   // Produtos excluídos da Consolidada Redes
   const PRODS_EXCLUIR_INVEST = ['BOARD REVIEW', 'Board Review'];
