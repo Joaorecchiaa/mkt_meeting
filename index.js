@@ -537,14 +537,14 @@ window.processExcel = async function(file, params) {
   function isReap(row) { return !isNovo(row); }
 
   // ---- Main filter ----
-  // Inclui apenas leads com utm_campaign que existe nas abas de investimento
+  // Filtro simples: Produto nos 5, Plataforma em META/LINKEDIN/GOOGLE,
+  // utm_campaign preenchido, data no período
   const filtered = pipe.filter(row =>
     PRODS.includes(row['Produto']) &&
-    row['Plataforma'] !== 'ORGANICO' &&
+    REDES_VALIDAS.includes(row['Plataforma']) &&
     row['utm_campaign'] &&
     String(row['utm_campaign']).trim() !== '' &&
-    inPeriod(row) &&
-    hasInvestment(row)
+    inPeriod(row)
   );
 
   // ---- Semanas ----
@@ -619,13 +619,15 @@ window.processExcel = async function(file, params) {
   }
 
   // ---- Ganhos ----
-  // Filtra por: período (data_aplicacao) + invest match + status Ganho
+  // Mesmo filtro dos leads: produto, plataforma, período, utm preenchido
   function ganhoRows(prod, plat) {
     return pipe.filter(r =>
       r['Produto'] === prod &&
       r['Status'] === 'Ganho' &&
+      REDES_VALIDAS.includes(r['Plataforma']) &&
+      r['utm_campaign'] &&
+      String(r['utm_campaign']).trim() !== '' &&
       inPeriod(r) &&
-      hasInvestment(r) &&
       (!plat || r['Plataforma'] === plat)
     ).map(r => ({
       id:    r['ID'],
